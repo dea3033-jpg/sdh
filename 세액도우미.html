@@ -8,13 +8,69 @@
 /* ===== 모양(색·글씨) ===== */
 body { font-family: "맑은 고딕", "Malgun Gothic", sans-serif; margin: 0; background: #f6f7f9; color: #222; }
 main { max-width: 980px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 24px; margin: 8px 0 4px; }
+.설명 { color: #555; font-size: 14px; margin: 4px 0; }
+.상자 { background: #fff; border: 1px solid #dde1e6; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+.맨위 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.카드고르기 label { margin-left: 10px; font-size: 16px; cursor: pointer; }
+textarea { width: 100%; box-sizing: border-box; min-height: 160px; font-size: 16px; padding: 10px;
+  border: 1px solid #c5ccd4; border-radius: 8px; font-family: inherit; }
+button { font-size: 16px; padding: 9px 16px; border-radius: 8px; border: 1px solid #9aa5b1;
+  background: #fff; cursor: pointer; margin: 8px 6px 0 0; font-family: inherit; }
+button.주요 { background: #2f6fde; border-color: #2f6fde; color: #fff; font-weight: bold; }
+.줄 { display: flex; gap: 10px; align-items: flex-start; padding: 10px 6px; border-bottom: 1px solid #eef0f3; }
+.줄:last-child { border-bottom: none; }
+.줄.체크됨 { background: #f3f8f3; }
+.줄 input[type=checkbox] { width: 20px; height: 20px; margin-top: 3px; cursor: pointer; }
+.줄내용 { flex: 1; }
+.물품 { font-weight: bold; font-size: 16px; }
+.작게 { color: #666; font-size: 13px; }
+.표시 { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 13px; font-weight: bold; margin-left: 6px; }
+.표시.과세 { background: #e3edff; color: #1d4fb8; }
+.표시.비과세 { background: #ffeedd; color: #b3540a; }
+.표시.면세 { background: #eceff2; color: #4a5560; }
+.표시.확인필요 { background: #fff4c2; color: #7a5b00; }
+.표시.오류 { background: #ffe0e0; color: #b00020; }
+.계산 { margin-top: 4px; font-size: 15px; }
+.알림 { margin-top: 4px; font-size: 13px; color: #7a5b00; }
+.알림.오류 { color: #b00020; }
+.요약 { font-size: 15px; margin: 6px 0; }
+table.합계 { border-collapse: collapse; margin-top: 8px; font-size: 15px; }
+table.합계 th, table.합계 td { border: 1px solid #dde1e6; padding: 6px 12px; text-align: right; }
+table.합계 th { background: #f0f3f6; }
+.숨김 { display: none; }
 </style>
 </head>
 <body>
 <!-- ===== 화면 부분 ===== -->
 <main>
-  <h1>물품 세액 정리 도우미</h1>
-  <p>화면은 기능 2에서 만들어요. 지금은 계산 규칙만 들어 있어요.</p>
+  <div class="맨위">
+    <div>
+      <h1>물품 세액 정리 도우미</h1>
+      <p class="설명">연습용 도구예요. 넣은 자료는 이 노트북 밖으로 나가지 않아요.</p>
+    </div>
+    <div class="카드고르기" id="카드고르기">
+      카드 종류:
+      <label><input type="radio" name="카드" value="A" checked> A</label>
+      <label><input type="radio" name="카드" value="B"> B</label>
+      <label><input type="radio" name="카드" value="C"> C</label>
+    </div>
+  </div>
+
+  <div class="상자">
+    <p class="설명">한 줄에 물품 하나씩 적거나 붙여 넣으세요. <b>물품 이름 · 1개 값 · 개수 · 총 금액 · 카드</b> 순서예요.</p>
+    <p class="설명">금액만 적어도 돼요 (예: <code>우유 11000</code>). 줄 끝에 A·B·C를 적으면 그 줄은 그 카드로 계산해요.</p>
+    <textarea id="입력칸" placeholder="복사용지 5500 6 33000&#10;우유 1100 10 11000&#10;프린터용지 상자 27500 2 55000 B"></textarea>
+    <button class="주요" id="확인버튼">과세 여부 확인</button>
+    <button id="예시버튼">예시 넣기</button>
+    <button id="지우기버튼">지우기</button>
+  </div>
+
+  <div class="상자 숨김" id="결과상자">
+    <div class="요약" id="요약"></div>
+    <div id="목록"></div>
+    <div id="합계자리"></div>
+  </div>
 </main>
 
 <script>
@@ -111,6 +167,154 @@ function 세액정하기(물품, 목록) {
 }
 
 function 금액글(n) { return Number(n).toLocaleString("ko-KR"); }
+
+// ===== 읽기 부분 =====
+// 한 줄을 물품 이름 · 1개 값 · 개수 · 총 금액 · 카드로 나눔
+// 숫자 1개 → 총 금액 / 2개 → 1개 값, 개수 / 3개 → 1개 값, 개수, 총 금액
+function 한줄읽기(줄, 기본카드) {
+  const 조각 = 줄.replace(/\t/g, " ").trim().split(/\s+/);
+  let 카드 = null;
+  const 숫자 = [];
+  while (조각.length > 1) {
+    const 끝 = 조각[조각.length - 1];
+    if (카드 === null && 숫자.length === 0 && /^[A-Ca-c]$/.test(끝)) {
+      카드 = 끝.toUpperCase(); 조각.pop(); continue;
+    }
+    const 숫자글 = 끝.replace(/,/g, "").replace(/원$/, "");
+    if (/^\d+$/.test(숫자글)) { 숫자.unshift(Number(숫자글)); 조각.pop(); continue; }
+    break;
+  }
+  const 쓸숫자 = 숫자.slice(-3);
+  const 물품 = { 물품이름: 조각.join(" "), 단가: null, 개수: null, 총금액: null, 카드: 카드 || 기본카드 };
+  if (쓸숫자.length === 1) 물품.총금액 = 쓸숫자[0];
+  if (쓸숫자.length === 2) { 물품.단가 = 쓸숫자[0]; 물품.개수 = 쓸숫자[1]; }
+  if (쓸숫자.length === 3) { 물품.단가 = 쓸숫자[0]; 물품.개수 = 쓸숫자[1]; 물품.총금액 = 쓸숫자[2]; }
+  return 물품;
+}
+
+function 목록읽기(글, 기본카드) {
+  return 글.split(/\r?\n/).map(줄 => 줄.trim()).filter(줄 => 줄).map(줄 => 한줄읽기(줄, 기본카드));
+}
+
+// ===== 화면 부분: 체크리스트 그리기 =====
+let 지금줄들 = []; // [{물품, 결과, 정답비교}]
+
+function 고른카드() {
+  return document.querySelector('input[name="카드"]:checked').value;
+}
+
+function 요소(태그, 반, 글) {
+  const e = document.createElement(태그);
+  if (반) e.className = 반;
+  if (글 != null) e.textContent = 글;
+  return e;
+}
+
+function 표시요소(결과) {
+  if (결과.상태 === "오류") return 요소("span", "표시 오류", "❗ 넣은 값 확인");
+  if (결과.상태 === "확인 필요") return 요소("span", "표시 확인필요", "⚠️ 확인 필요");
+  return null;
+}
+
+function 구분요소(구분) {
+  const 그림 = { 과세: "🟦 과세", 비과세: "🟧 비과세", 면세: "⬜ 면세" }[구분];
+  return 요소("span", "표시 " + 구분, 그림);
+}
+
+function 계산글(결과) {
+  if (결과.상태 !== "정상") return "";
+  const 칸 = [`공급가액 ${금액글(결과.공급가액)}`];
+  if (결과.세액) 칸.push(`세액 ${금액글(결과.세액)}`);
+  if (결과.불공제세) 칸.push(`불공제세 ${금액글(결과.불공제세)}`);
+  if (결과.면세) 칸.push(`면세 ${금액글(결과.면세)}`);
+  return "→ " + 칸.join(" / ");
+}
+
+function 체크리스트그리기() {
+  const 목록 = document.getElementById("목록");
+  목록.replaceChildren();
+  지금줄들.forEach((줄, i) => {
+    const 칸 = 요소("div", "줄");
+    const 체크 = document.createElement("input");
+    체크.type = "checkbox";
+    체크.addEventListener("change", () => { 칸.classList.toggle("체크됨", 체크.checked); 요약그리기(); });
+    칸.appendChild(체크);
+
+    const 내용 = 요소("div", "줄내용");
+    const 첫줄 = 요소("div");
+    첫줄.appendChild(요소("span", "물품", `${i + 1}. ${줄.물품.물품이름 || "(이름 없음)"}`));
+    첫줄.appendChild(구분요소(줄.결과.구분));
+    const 상태 = 표시요소(줄.결과);
+    if (상태) 첫줄.appendChild(상태);
+    if (줄.정답비교) 첫줄.appendChild(요소("span", "표시 " + (줄.정답비교.맞음 ? "과세" : "오류"), 줄.정답비교.맞음 ? "✅ 정답과 맞음" : "❌ 정답과 다름"));
+    내용.appendChild(첫줄);
+
+    const 금액부분 = [];
+    if (줄.물품.단가 != null) 금액부분.push(`1개 ${금액글(줄.물품.단가)}원 × ${줄.물품.개수}개`);
+    const 총 = 줄.결과.총금액 ?? 줄.물품.총금액;
+    if (총 != null) 금액부분.push(`총 ${금액글(총)}원`);
+    금액부분.push(`카드 ${줄.물품.카드 || "(없음)"}`);
+    if (줄.물품.날짜) 금액부분.push(줄.물품.날짜);
+    내용.appendChild(요소("div", "작게", 금액부분.join(" · ")));
+
+    const 계산 = 계산글(줄.결과);
+    if (계산) 내용.appendChild(요소("div", "계산", 계산));
+    줄.결과.알림.forEach(글 => 내용.appendChild(요소("div", "알림" + (줄.결과.상태 === "오류" ? " 오류" : ""), "· " + 글)));
+    if (줄.정답비교 && !줄.정답비교.맞음) 내용.appendChild(요소("div", "알림 오류", "· 정답: " + 줄.정답비교.정답글));
+    칸.appendChild(내용);
+    목록.appendChild(칸);
+  });
+  document.getElementById("결과상자").classList.remove("숨김");
+  요약그리기();
+}
+
+function 요약그리기() {
+  const 체크들 = [...document.querySelectorAll("#목록 input[type=checkbox]")];
+  const 체크수 = 체크들.filter(c => c.checked).length;
+  const 문제수 = 지금줄들.filter(줄 => 줄.결과.상태 !== "정상").length;
+  let 글 = `물품 ${지금줄들.length}개 · 확인 ${체크수}/${지금줄들.length}`;
+  if (문제수) 글 += ` · ⚠️❗ 살펴볼 물품 ${문제수}개`;
+  const 비교 = 지금줄들.filter(줄 => 줄.정답비교);
+  if (비교.length) 글 += ` · 정답과 맞음 ${비교.filter(줄 => 줄.정답비교.맞음).length}/${비교.length}`;
+  document.getElementById("요약").textContent = 글;
+
+  const 자리 = document.getElementById("합계자리");
+  자리.replaceChildren();
+  if (!지금줄들.length) return;
+  if (체크수 < 지금줄들.length) {
+    자리.appendChild(요소("p", "설명", "모든 물품에 ☑ 체크하면 합계가 나와요."));
+    return;
+  }
+  const 정상 = 지금줄들.filter(줄 => 줄.결과.상태 === "정상");
+  const 합 = k => 정상.reduce((s, 줄) => s + 줄.결과[k], 0);
+  const 표 = 요소("table", "합계");
+  const 머리 = 요소("tr");
+  ["", "공급가액", "세액", "불공제세", "면세", "총 금액"].forEach(t => 머리.appendChild(요소("th", null, t)));
+  const 몸 = 요소("tr");
+  [`합계 (${정상.length}개)`, 합("공급가액"), 합("세액"), 합("불공제세"), 합("면세"), 합("총금액")]
+    .forEach((v, i) => 몸.appendChild(요소(i ? "td" : "th", null, i ? 금액글(v) : v)));
+  표.append(머리, 몸);
+  자리.appendChild(요소("p", "요약", "✅ 모두 확인했어요. 합계:"));
+  자리.appendChild(표);
+  if (문제수) 자리.appendChild(요소("p", "알림", `· ⚠️❗ 표시된 ${문제수}개는 합계에 넣지 않았어요. 따로 확인해 주세요.`));
+}
+
+function 붙여넣은목록확인() {
+  const 물품들 = 목록읽기(document.getElementById("입력칸").value, 고른카드());
+  지금줄들 = 물품들.map(물품 => ({ 물품, 결과: 세액정하기(물품, 기본비과세목록) }));
+  체크리스트그리기();
+}
+
+document.getElementById("확인버튼").addEventListener("click", 붙여넣은목록확인);
+document.getElementById("예시버튼").addEventListener("click", () => {
+  document.getElementById("입력칸").value =
+    "복사용지 5500 6 33000\n우유 1100 10 11000\n저지방 우유 6600\n프린터용지 상자 27500 2 55000 B\n사무용 의자 132000 5 660000 C\n스테이플러 6600 2 15400\n우편 발송 요금 27000";
+});
+document.getElementById("지우기버튼").addEventListener("click", () => {
+  document.getElementById("입력칸").value = "";
+  지금줄들 = [];
+  document.getElementById("결과상자").classList.add("숨김");
+});
 </script>
 </body>
 </html>
