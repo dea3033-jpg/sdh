@@ -42,6 +42,15 @@ table.합계 th { background: #f0f3f6; }
 </style>
 </head>
 <body>
+<!-- ===== 문제 알림: 이 인터넷 창에서 도구가 작동하지 않으면 맨 위에 안내를 띄움 ===== -->
+<div id="문제알림" style="display:none;background:#ffe0e0;color:#b00020;padding:12px 16px;font-weight:bold;"></div>
+<script>
+window.onerror = function (메시지) {
+  var 칸 = document.getElementById("문제알림");
+  칸.style.display = "block";
+  칸.textContent = "이 인터넷 창에서는 도구가 제대로 작동하지 않아요. 크롬이나 엣지(최신판)로 열어 주세요. (오류: " + 메시지 + ")";
+};
+</script>
 <!-- ===== 화면 부분 ===== -->
 <main>
   <div class="맨위">
@@ -60,7 +69,7 @@ table.합계 th { background: #f0f3f6; }
   <div class="상자">
     <p class="설명">한 줄에 물품 하나씩 적거나 붙여 넣으세요. <b>물품 이름 · 1개 값 · 개수 · 총 금액 · 카드</b> 순서예요.</p>
     <p class="설명">금액만 적어도 돼요 (예: <code>우유 11000</code>). 줄 끝에 A·B·C를 적으면 그 줄은 그 카드로 계산해요.</p>
-    <textarea id="입력칸" placeholder="복사용지 5500 6 33000&#10;우유 1100 10 11000&#10;프린터용지 상자 27500 2 55000 B"></textarea>
+    <textarea id="입력칸" placeholder="(회색 글씨는 보기예요. 여기에 직접 적거나 [예시 넣기]를 누르세요)&#10;복사용지 5500 6 33000&#10;우유 1100 10 11000&#10;프린터용지 상자 27500 2 55000 B"></textarea>
     <button class="주요" id="확인버튼">과세 여부 확인</button>
     <button id="예시버튼">예시 넣기</button>
     <button id="지우기버튼">지우기</button>
@@ -235,7 +244,7 @@ function 계산글(결과) {
 
 function 체크리스트그리기() {
   const 목록 = document.getElementById("목록");
-  목록.replaceChildren();
+  목록.innerHTML = "";
   지금줄들.forEach((줄, i) => {
     const 칸 = 요소("div", "줄");
     const 체크 = document.createElement("input");
@@ -254,7 +263,7 @@ function 체크리스트그리기() {
 
     const 금액부분 = [];
     if (줄.물품.단가 != null) 금액부분.push(`1개 ${금액글(줄.물품.단가)}원 × ${줄.물품.개수}개`);
-    const 총 = 줄.결과.총금액 ?? 줄.물품.총금액;
+    const 총 = 줄.결과.총금액 != null ? 줄.결과.총금액 : 줄.물품.총금액;
     if (총 != null) 금액부분.push(`총 ${금액글(총)}원`);
     금액부분.push(`카드 ${줄.물품.카드 || "(없음)"}`);
     if (줄.물품.날짜) 금액부분.push(줄.물품.날짜);
@@ -282,7 +291,7 @@ function 요약그리기() {
   document.getElementById("요약").textContent = 글;
 
   const 자리 = document.getElementById("합계자리");
-  자리.replaceChildren();
+  자리.innerHTML = "";
   if (!지금줄들.length) return;
   if (체크수 < 지금줄들.length) {
     자리.appendChild(요소("p", "설명", "모든 물품에 ☑ 체크하면 합계가 나와요."));
@@ -304,6 +313,15 @@ function 요약그리기() {
 
 function 붙여넣은목록확인() {
   const 물품들 = 목록읽기(document.getElementById("입력칸").value, 고른카드());
+  if (!물품들.length) {
+    지금줄들 = [];
+    document.getElementById("목록").innerHTML = "";
+    document.getElementById("합계자리").innerHTML = "";
+    document.getElementById("요약").textContent =
+      "⚠️ 칸에 적힌 물품이 없어요. 칸 안의 회색 글씨는 보기예요. 물품을 직접 적거나 [예시 넣기]를 먼저 눌러 주세요.";
+    document.getElementById("결과상자").classList.remove("숨김");
+    return;
+  }
   지금줄들 = 물품들.map(물품 => ({ 물품, 결과: 세액정하기(물품, 기본비과세목록) }));
   체크리스트그리기();
 }
@@ -315,7 +333,9 @@ function CSV읽기(글) {
   const 머리 = 줄들[0].split(",").map(t => t.trim());
   return 줄들.slice(1).map(줄 => {
     const 칸 = 줄.split(",");
-    return Object.fromEntries(머리.map((이름, i) => [이름, (칸[i] || "").trim()]));
+    const 행 = {};
+    머리.forEach((이름, i) => { 행[이름] = (칸[i] || "").trim(); });
+    return 행;
   });
 }
 
