@@ -60,7 +60,7 @@ table.합계 th { background: #f0f3f6; }
 window.onerror = function (메시지) {
   var 칸 = document.getElementById("문제알림");
   칸.style.display = "block";
-  칸.textContent = "이 인터넷 창에서는 도구가 제대로 작동하지 않아요. 크롬이나 엣지(최신판)로 열어 주세요. (오류: " + 메시지 + ")";
+  칸.textContent = "도구에서 예상하지 못한 문제가 생겼어요. 키보드 F5를 눌러 새로 고친 뒤 다시 해 보세요. 계속 뜨면 크롬이나 엣지(최신판)로 열어 주세요. (오류: " + 메시지 + ")";
 };
 </script>
 <!-- ===== 화면 부분 ===== -->
@@ -443,7 +443,8 @@ function 붙여넣은목록확인() {
 // ===== 연습 자료 불러오기·정답 비교 =====
 // 쉼표로 나눈 표 파일(CSV)을 읽음. 칸 이름은 연습자료/구매목록.csv와 같음
 function CSV읽기(글) {
-  const 줄들 = 글.replace(/^﻿/, "").split(/\r?\n/).filter(줄 => 줄.trim());
+  const 줄들 = String(글 || "").replace(/^﻿/, "").split(/\r?\n/).filter(줄 => 줄.trim());
+  if (!줄들.length) return null; // 빈 파일
   const 머리 = 줄들[0].split(",").map(t => t.trim());
   return 줄들.slice(1).map(줄 => {
     const 칸 = 줄.split(",");
@@ -480,8 +481,19 @@ function 정답비교하기(행, 결과) {
   return { 맞음, 정답글: 정답 };
 }
 
+// 결과 칸을 비우고 안내 문구만 보여 줌 (파일에 문제가 있을 때)
+function 안내만보여주기(글) {
+  지금줄들 = [];
+  document.getElementById("목록").innerHTML = "";
+  document.getElementById("합계자리").innerHTML = "";
+  document.getElementById("탭자리").innerHTML = "";
+  document.getElementById("요약").textContent = "⚠️ " + 글;
+  document.getElementById("결과상자").classList.remove("숨김");
+}
+
 function 연습자료보여주기(글) {
   const 행들 = CSV읽기(글);
+  if (행들 === null) { 안내만보여주기("고른 파일이 비어 있어요. 연습자료/구매목록.csv처럼 물품이 적힌 파일을 골라 주세요."); return; }
   지금줄들 = 행들.map(행 => {
     const 물품 = {
       물품이름: 행["물품이름"], 단가: 숫자로(행["1개값"]), 개수: 숫자로(행["구매개수"]),
@@ -498,7 +510,10 @@ document.getElementById("연습파일").addEventListener("change", 이벤트 => 
   const 파일 = 이벤트.target.files[0];
   if (!파일) return;
   const 읽개 = new FileReader();
-  읽개.onload = () => 연습자료보여주기(읽개.result);
+  읽개.onload = () => {
+    try { 연습자료보여주기(읽개.result); }
+    catch (e) { 안내만보여주기("파일을 읽다가 문제가 생겼어요. 연습자료/구매목록.csv와 같은 모양의 파일인지 확인해 주세요."); }
+  };
   읽개.readAsText(파일, "utf-8");
   이벤트.target.value = "";
 });
