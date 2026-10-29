@@ -46,6 +46,19 @@ table.합계 { border-collapse: collapse; margin-top: 8px; font-size: 15px; }
 table.합계 th, table.합계 td { border: 1px solid #dde1e6; padding: 6px 12px; text-align: right; }
 table.합계 th { background: #f0f3f6; }
 .숨김 { display: none; }
+.입력머리, .입력줄 { display: grid; grid-template-columns: 2fr 1.1fr 0.7fr 1.1fr 1.3fr auto; gap: 6px; align-items: center; }
+.입력머리 { font-size: 13px; color: #555; font-weight: bold; padding: 0 2px 4px; }
+.입력줄 { margin-bottom: 6px; }
+.입력줄 input, .입력줄 select { width: 100%; box-sizing: border-box; font-size: 15px; padding: 7px 8px;
+  border: 1px solid #c5ccd4; border-radius: 6px; font-family: inherit; background: #fff; }
+.입력줄 input.숫자칸 { text-align: right; }
+.입력줄 input.자동 { background: #f3f6fa; color: #445; }
+.입력줄 button { margin: 0; padding: 6px 10px; font-size: 14px; }
+@media (max-width: 640px) {
+  .입력머리 { display: none; }
+  .입력줄 { grid-template-columns: 1fr 1fr; padding: 8px; border: 1px solid #e3e6ea; border-radius: 8px; }
+  .입력줄 .품목칸 { grid-column: 1 / -1; }
+}
 .탭줄 { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; border-bottom: 2px solid #dde1e6; padding-bottom: 8px; }
 .탭줄 button { margin: 0; padding: 6px 12px; font-size: 14px; }
 .탭줄 button.고름 { background: #2f6fde; border-color: #2f6fde; color: #fff; font-weight: bold; }
@@ -70,18 +83,15 @@ window.onerror = function (메시지) {
       <h1>물품 세액 정리 도우미</h1>
       <p class="설명">연습용 도구예요. 넣은 자료는 이 노트북 밖으로 나가지 않아요.</p>
     </div>
-    <div class="카드고르기" id="카드고르기">
-      카드 종류:
-      <label><input type="radio" name="카드" value="A" checked> A(자체)</label>
-      <label><input type="radio" name="카드" value="B"> B(에특)</label>
-      <label><input type="radio" name="카드" value="C"> C(하이브리드)</label>
-    </div>
   </div>
 
   <div class="상자">
-    <p class="설명">한 줄에 물품 하나씩 적거나 붙여 넣으세요. <b>물품 이름 · 1개 값 · 개수 · 총 금액 · 카드</b> 순서예요.</p>
-    <p class="설명">금액만 적어도 돼요 (예: <code>우유 11000</code>). <code>33,000원</code>, <code>6개</code>처럼 적어도 읽어요. 줄 끝에 A(자체)·B(에특)·C(하이브리드) 중 영문자 하나를 적으면 그 줄은 그 카드로 계산해요.</p>
-    <textarea id="입력칸" placeholder="(회색 글씨는 보기예요. 여기에 직접 적거나 [예시 넣기]를 누르세요)&#10;복사용지 5500 6 33000&#10;우유 1100 10 11000&#10;프린터용지 상자 27500 2 55000 B"></textarea>
+    <p class="설명">물품마다 한 줄씩 칸에 적어 주세요. <b>개당 가격</b>과 <b>개수</b>를 넣으면 <b>총 금액</b>은 자동으로 채워져요 (직접 고쳐도 돼요). 카드 종류는 줄마다 골라요.</p>
+    <div class="입력표">
+      <div class="입력머리"><span>품목</span><span>개당 가격(원)</span><span>개수</span><span>총 금액(원)</span><span>카드 종류</span><span></span></div>
+      <div id="입력줄들"></div>
+    </div>
+    <button id="줄추가버튼">+ 줄 추가</button>
     <button class="주요" id="확인버튼">과세 여부 확인</button>
     <button id="예시버튼">예시 넣기</button>
     <button id="지우기버튼">지우기</button>
@@ -183,7 +193,7 @@ function 세액정하기(물품, 목록) {
   // 물품 이름이 없으면 계산하지 않음
   if (!String(물품.물품이름 || "").trim()) {
     결과.상태 = "오류"; 결과.오류종류 = "이름";
-    결과.알림.push("물품 이름이 빠졌어요. 이름을 먼저 적어 주세요 (예: 복사용지 33000)");
+    결과.알림.push("품목이 빠졌어요. 품목 칸에 물품 이름을 적어 주세요 (예: 복사용지)");
     return 결과;
   }
 
@@ -292,44 +302,81 @@ function 금액글(n) { return Number(n).toLocaleString("ko-KR"); }
 const 카드이름표 = { A: "A(자체)", B: "B(에특)", C: "C(하이브리드)" };
 function 카드이름(카드) { const k = String(카드).trim().toUpperCase(); return 카드이름표[k] || k; }
 
-// ===== 읽기 부분 =====
-// 한 줄을 물품 이름 · 1개 값 · 개수 · 총 금액 · 카드로 나눔
-// 숫자 1개 → 총 금액 / 2개 → 1개 값, 개수 / 3개 → 1개 값, 개수, 총 금액
-function 한줄읽기(줄, 기본카드) {
-  const 조각 = 줄.replace(/\t/g, " ").trim().split(/\s+/);
-  let 카드 = null;
-  const 숫자 = [];
-  while (조각.length > 0) {
-    const 끝 = 조각[조각.length - 1];
-    // 줄 끝의 영문자 하나는 카드로 봄 (A·B·C가 아니면 뒤에서 '모르는 카드'로 알려 줌)
-    if (카드 === null && 숫자.length === 0 && /^[A-Za-z]$/.test(끝)) {
-      카드 = 끝.toUpperCase(); 조각.pop(); continue;
-    }
-    // 숫자로 봄: 쉼표, 끝의 '원'·'개'를 빼고, 마이너스(-)·소수점도 일단 읽은 뒤 뒤에서 알려 줌
-    const 숫자글 = 끝.replace(/,/g, "").replace(/(원|개)$/, ""); // '33,000원', '6개'도 숫자로 읽음
-    if (/^-?\d+(\.\d+)?$/.test(숫자글)) { 숫자.unshift({ 값: Number(숫자글), 개: /개$/.test(끝) }); 조각.pop(); continue; }
-    break;
-  }
-  const 쓸숫자 = 숫자.slice(-3);
-  const 물품 = { 물품이름: 조각.join(" "), 단가: null, 개수: null, 총금액: null, 카드: 카드 || 기본카드 };
-  const 개붙은것 = 쓸숫자.filter(n => n.개);
-  if (개붙은것.length === 1 && 쓸숫자.length >= 2) {
-    // '6개'처럼 '개'가 붙은 숫자는 개수로, 나머지는 순서대로 1개 값·총 금액 (하나뿐이면 총 금액)
-    const 나머지 = 쓸숫자.filter(n => !n.개).map(n => n.값);
-    물품.개수 = 개붙은것[0].값;
-    if (나머지.length === 1) 물품.총금액 = 나머지[0];
-    else { 물품.단가 = 나머지[0]; 물품.총금액 = 나머지[1]; }
-    return 물품;
-  }
-  const 값들 = 쓸숫자.map(n => n.값);
-  if (값들.length === 1) 물품.총금액 = 값들[0];
-  if (값들.length === 2) { 물품.단가 = 값들[0]; 물품.개수 = 값들[1]; }
-  if (값들.length === 3) { 물품.단가 = 값들[0]; 물품.개수 = 값들[1]; 물품.총금액 = 값들[2]; }
-  return 물품;
+// ===== 화면 부분: 칸별 입력 표 (기능 10) =====
+// 한 줄 = 품목 · 개당 가격 · 개수 · 총 금액 · 카드 종류(고르기) · 삭제
+// 총 금액은 개당 가격 × 개수로 자동으로 채움. 직접 고치면 그 값을 씀 (다르면 '금액 확인 필요')
+function 입력줄추가(값) {
+  값 = 값 || {};
+  const 줄 = 요소("div", "입력줄");
+  const 칸 = (반, 안내, 글) => {
+    const e = document.createElement("input");
+    e.type = "text"; e.className = 반; e.placeholder = 안내; e.value = 글 == null ? "" : String(글);
+    return e;
+  };
+  const 품목 = 칸("품목칸", "예: 복사용지", 값.이름);
+  const 단가 = 칸("단가칸 숫자칸", "예: 5,500", 값.단가);
+  const 개수 = 칸("개수칸 숫자칸", "예: 6", 값.개수);
+  const 총액 = 칸("총액칸 숫자칸", "자동 계산", 값.총금액);
+  [단가, 개수, 총액].forEach(e => e.setAttribute("inputmode", "numeric"));
+  const 카드 = document.createElement("select");
+  카드.className = "카드칸";
+  ["A", "B", "C"].forEach(k => { const o = document.createElement("option"); o.value = k; o.textContent = 카드이름(k); 카드.appendChild(o); });
+  카드.value = 값.카드 || "A";
+  const 삭제 = 요소("button", null, "삭제");
+  삭제.title = "이 줄 지우기";
+
+  // 총 금액 자동 채우기
+  const 곱 = () => {
+    const a = 숫자로(단가.value), b = 숫자로(개수.value);
+    return a != null && b != null && !isNaN(a) && !isNaN(b) ? a * b : null;
+  };
+  총액.dataset.직접 = 값.총금액 != null && 값.총금액 !== "" && 숫자로(값.총금액) !== 곱() ? "1" : "";
+  const 자동표시 = () => 총액.classList.toggle("자동", 총액.dataset.직접 !== "1");
+  const 자동채우기 = () => {
+    if (총액.dataset.직접 === "1") return;
+    const v = 곱();
+    총액.value = v == null ? "" : 금액글(v);
+  };
+  단가.addEventListener("input", 자동채우기);
+  개수.addEventListener("input", 자동채우기);
+  총액.addEventListener("input", () => {
+    총액.dataset.직접 = 총액.value.trim() ? "1" : "";
+    if (!총액.value.trim()) 자동채우기();
+    자동표시();
+  });
+  if (!값.총금액) 자동채우기();
+  자동표시();
+
+  // Enter를 누르면 다음 줄로 (마지막 줄이면 새 줄을 만듦)
+  [품목, 단가, 개수, 총액, 카드].forEach(e => e.addEventListener("keydown", 이벤트 => {
+    if (이벤트.key !== "Enter") return;
+    이벤트.preventDefault();
+    const 다음 = 줄.nextElementSibling || 입력줄추가();
+    다음.querySelector(".품목칸").focus();
+  }));
+  삭제.addEventListener("click", () => {
+    줄.remove();
+    if (!document.querySelector("#입력줄들 .입력줄")) 입력줄추가();
+  });
+
+  줄.append(품목, 단가, 개수, 총액, 카드, 삭제);
+  document.getElementById("입력줄들").appendChild(줄);
+  return 줄;
 }
 
-function 목록읽기(글, 기본카드) {
-  return 글.split(/\r?\n/).map(줄 => 줄.trim()).filter(줄 => 줄).map(줄 => 한줄읽기(줄, 기본카드));
+function 입력초기화(줄수) {
+  document.getElementById("입력줄들").innerHTML = "";
+  const 몇줄 = 줄수 == null ? 3 : 줄수; // 0이면 빈 줄 없이 시작 ([예시 넣기]에서 씀)
+  for (let i = 0; i < 몇줄; i++) 입력줄추가();
+}
+
+// 입력 표를 읽어 물품 목록으로 만듦 (모든 칸이 빈 줄은 건너뜀)
+function 입력줄읽기() {
+  return [...document.querySelectorAll("#입력줄들 .입력줄")].map(줄 => {
+    const 글 = 반 => 줄.querySelector("." + 반).value.trim();
+    return { 물품이름: 글("품목칸"), 단가글: 글("단가칸"), 개수글: 글("개수칸"), 총액글: 글("총액칸"), 카드: 줄.querySelector(".카드칸").value };
+  }).filter(r => r.물품이름 || r.단가글 || r.개수글 || r.총액글)
+    .map(r => ({ 물품이름: r.물품이름, 단가: 숫자로(r.단가글), 개수: 숫자로(r.개수글), 총금액: 숫자로(r.총액글), 카드: r.카드 }));
 }
 
 // ===== 화면 부분: 체크리스트 그리기 =====
@@ -356,9 +403,6 @@ function 탭적용() {
   요약그리기();
 }
 
-function 고른카드() {
-  return document.querySelector('input[name="카드"]:checked').value;
-}
 
 function 요소(태그, 반, 글) {
   const e = document.createElement(태그);
@@ -512,15 +556,15 @@ function 요약그리기() {
   if (문제수) 자리.appendChild(요소("p", "알림", `· ⚠️❗ 표시된 ${문제수}개는 합계에 넣지 않았어요. 따로 확인해 주세요.`));
 }
 
-function 붙여넣은목록확인() {
-  const 물품들 = 목록읽기(document.getElementById("입력칸").value, 고른카드());
+function 입력한목록확인() {
+  const 물품들 = 입력줄읽기();
   if (!물품들.length) {
     지금줄들 = [];
     document.getElementById("목록").innerHTML = "";
     document.getElementById("합계자리").innerHTML = "";
     document.getElementById("탭자리").innerHTML = "";
     document.getElementById("요약").textContent =
-      "⚠️ 칸에 적힌 물품이 없어요. 칸 안의 회색 글씨는 보기예요. 물품을 직접 적거나 [예시 넣기]를 먼저 눌러 주세요.";
+      "⚠️ 적힌 물품이 없어요. 회색 글씨는 보기예요. 품목 칸부터 적거나 [예시 넣기]를 먼저 눌러 주세요.";
     document.getElementById("결과상자").classList.remove("숨김");
     return;
   }
@@ -553,7 +597,7 @@ function 빠진칸찾기(머리) {
 }
 
 function 숫자로(글) {
-  const t = String(글 || "").replace(/,/g, "").trim();
+  const t = String(글 == null ? "" : 글).replace(/,/g, "").trim().replace(/(원|개)$/, ""); // '33,000원', '6개'도 숫자로 읽음
   return t === "" ? null : Number(t);
 }
 
@@ -622,16 +666,26 @@ document.getElementById("연습파일").addEventListener("change", 이벤트 => 
   이벤트.target.value = "";
 });
 
-document.getElementById("확인버튼").addEventListener("click", 붙여넣은목록확인);
+document.getElementById("확인버튼").addEventListener("click", 입력한목록확인);
+document.getElementById("줄추가버튼").addEventListener("click", () => 입력줄추가().querySelector(".품목칸").focus());
 document.getElementById("예시버튼").addEventListener("click", () => {
-  document.getElementById("입력칸").value =
-    "복사용지 5500 6 33000\n우유 1100 10 11000 B\n초코우유 1650 4 6600\n항공권 165000 2 330000 C\n프린터용지 상자 27500 2 55000 B\n사무용 의자 132000 5 660000 C\n스테이플러 6600 2 15400";
+  입력초기화(0);
+  [
+    { 이름: "복사용지", 단가: 5500, 개수: 6, 카드: "A" },
+    { 이름: "우유", 단가: 1100, 개수: 10, 카드: "B" },
+    { 이름: "초코우유", 단가: 1650, 개수: 4, 카드: "A" },
+    { 이름: "항공권", 단가: 165000, 개수: 2, 카드: "C" },
+    { 이름: "프린터용지 상자", 단가: 27500, 개수: 2, 카드: "B" },
+    { 이름: "사무용 의자", 단가: 132000, 개수: 5, 카드: "C" },
+    { 이름: "스테이플러", 단가: 6600, 개수: 2, 총금액: "15,400", 카드: "A" },
+  ].forEach(입력줄추가);
 });
 document.getElementById("지우기버튼").addEventListener("click", () => {
-  document.getElementById("입력칸").value = "";
+  입력초기화();
   지금줄들 = [];
   document.getElementById("결과상자").classList.add("숨김");
 });
+입력초기화();
 </script>
 </body>
 </html>
