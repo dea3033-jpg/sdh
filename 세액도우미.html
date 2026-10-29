@@ -468,12 +468,22 @@ function CSV읽기(글) {
   const 줄들 = String(글 || "").replace(/^﻿/, "").split(/\r?\n/).filter(줄 => 줄.trim());
   if (!줄들.length) return null; // 빈 파일
   const 머리 = 줄들[0].split(",").map(t => t.trim());
-  return 줄들.slice(1).map(줄 => {
+  const 행들 = 줄들.slice(1).map(줄 => {
     const 칸 = 줄.split(",");
     const 행 = {};
     머리.forEach((이름, i) => { 행[이름] = (칸[i] || "").trim(); });
     return 행;
   });
+  행들.머리 = 머리;
+  return 행들;
+}
+
+// 구매목록 모양의 파일인지 살펴봄. 빠진 칸 이름을 돌려줌 (없으면 빈 목록)
+function 빠진칸찾기(머리) {
+  const 빠짐 = ["물품이름", "카드종류"].filter(k => 머리.indexOf(k) < 0);
+  const 금액있음 = 머리.indexOf("총금액") >= 0 || (머리.indexOf("1개값") >= 0 && 머리.indexOf("구매개수") >= 0);
+  if (!금액있음) 빠짐.push("총금액 (또는 1개값·구매개수)");
+  return 빠짐;
 }
 
 function 숫자로(글) {
@@ -516,6 +526,11 @@ function 안내만보여주기(글) {
 function 연습자료보여주기(글) {
   const 행들 = CSV읽기(글);
   if (행들 === null) { 안내만보여주기("고른 파일이 비어 있어요. 연습자료/구매목록.csv처럼 물품이 적힌 파일을 골라 주세요."); return; }
+  const 빠짐 = 빠진칸찾기(행들.머리);
+  if (빠짐.length) {
+    안내만보여주기(`구매목록 모양의 파일이 아니에요. 첫 줄에 이 칸이 없어요: ${빠짐.join(", ")}. 연습자료/구매목록.csv를 골랐는지 확인해 주세요.`);
+    return;
+  }
   지금줄들 = 행들.map(행 => {
     const 물품 = {
       물품이름: 행["물품이름"], 단가: 숫자로(행["1개값"]), 개수: 숫자로(행["구매개수"]),
