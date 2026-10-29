@@ -139,6 +139,13 @@ function 세액정하기(물품, 목록) {
   const 찾음 = 구분찾기(물품.물품이름, 목록);
   결과.구분 = 찾음.구분;
 
+  // 물품 이름이 없으면 계산하지 않음
+  if (!String(물품.물품이름 || "").trim()) {
+    결과.상태 = "오류"; 결과.오류종류 = "이름";
+    결과.알림.push("물품 이름이 빠졌어요. 이름을 먼저 적어 주세요 (예: 복사용지 33000)");
+    return 결과;
+  }
+
   // 넣은 숫자 살펴보기 (문제가 있으면 계산하지 않고 원인을 알려 줌)
   const 숫자문제 = 숫자살펴보기(물품);
   if (숫자문제) {
@@ -248,7 +255,7 @@ function 한줄읽기(줄, 기본카드) {
   const 조각 = 줄.replace(/\t/g, " ").trim().split(/\s+/);
   let 카드 = null;
   const 숫자 = [];
-  while (조각.length > 1) {
+  while (조각.length > 0) {
     const 끝 = 조각[조각.length - 1];
     if (카드 === null && 숫자.length === 0 && /^[A-Ca-c]$/.test(끝)) {
       카드 = 끝.toUpperCase(); 조각.pop(); continue;
