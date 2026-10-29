@@ -83,6 +83,12 @@ window.onerror = function (메시지) {
       <h1>물품 세액 정리 도우미</h1>
       <p class="설명">연습용 도구예요. 넣은 자료는 이 노트북 밖으로 나가지 않아요.</p>
     </div>
+    <div class="카드고르기" id="카드고르기" title="새 줄의 기본 카드예요. 바꾸면 줄마다 직접 고르지 않은 카드도 함께 바뀌어요">
+      카드 종류:
+      <label><input type="radio" name="카드" value="A" checked> A(자체)</label>
+      <label><input type="radio" name="카드" value="B"> B(에특)</label>
+      <label><input type="radio" name="카드" value="C"> C(하이브리드)</label>
+    </div>
   </div>
 
   <div class="상자">
@@ -321,7 +327,9 @@ function 입력줄추가(값) {
   const 카드 = document.createElement("select");
   카드.className = "카드칸";
   ["A", "B", "C"].forEach(k => { const o = document.createElement("option"); o.value = k; o.textContent = 카드이름(k); 카드.appendChild(o); });
-  카드.value = 값.카드 || "A";
+  카드.value = 값.카드 || 고른카드();
+  카드.dataset.직접 = 값.카드 ? "1" : ""; // 줄에서 직접 고르면 맨 위 카드를 바꿔도 그대로 둠
+  카드.addEventListener("change", () => { 카드.dataset.직접 = "1"; });
   const 삭제 = 요소("button", null, "삭제");
   삭제.title = "이 줄 지우기";
 
@@ -363,6 +371,15 @@ function 입력줄추가(값) {
   document.getElementById("입력줄들").appendChild(줄);
   return 줄;
 }
+
+// 맨 위 카드 고르기: 새 줄의 기본 카드. 바꾸면 직접 고르지 않은 줄의 카드도 함께 바꿈
+function 고른카드() {
+  const 고름 = document.querySelector('input[name="카드"]:checked');
+  return 고름 ? 고름.value : "A";
+}
+document.querySelectorAll('input[name="카드"]').forEach(단추 => 단추.addEventListener("change", () => {
+  document.querySelectorAll("#입력줄들 .카드칸").forEach(칸 => { if (칸.dataset.직접 !== "1") 칸.value = 고른카드(); });
+}));
 
 function 입력초기화(줄수) {
   document.getElementById("입력줄들").innerHTML = "";
