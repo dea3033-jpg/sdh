@@ -237,6 +237,8 @@ function 숫자살펴보기(물품) {
   for (const [이름, 값, 조사] of 칸들) {
     if (값 == null) continue;
     if (isNaN(값)) return `${이름} 칸에 숫자가 아닌 글자가 있어요. 숫자만 적어 주세요 (예: 33000)`;
+    if (값 < 0) return `${이름}${조사} 0보다 작아요 (마이너스). 맞게 적었는지 확인해 주세요`;
+    if (값 % 1 !== 0) return `${이름}에 소수점이 있어요. ${이름 === "개수" ? "개수는" : "금액은"} 소수점 없이 적어 주세요`;
     if (값 === 0) return `${이름}${조사} 0이에요. 맞게 적었는지 확인해 주세요`;
     if (값 > 금액상한) return `${이름}${조사} 너무 커요 (${금액글(금액상한)}원 넘음). 0이 더 붙지 않았는지 확인해 주세요`;
   }
@@ -258,11 +260,13 @@ function 한줄읽기(줄, 기본카드) {
   const 숫자 = [];
   while (조각.length > 0) {
     const 끝 = 조각[조각.length - 1];
-    if (카드 === null && 숫자.length === 0 && /^[A-Ca-c]$/.test(끝)) {
+    // 줄 끝의 영문자 하나는 카드로 봄 (A·B·C가 아니면 뒤에서 '모르는 카드'로 알려 줌)
+    if (카드 === null && 숫자.length === 0 && /^[A-Za-z]$/.test(끝)) {
       카드 = 끝.toUpperCase(); 조각.pop(); continue;
     }
+    // 숫자로 봄: 쉼표, 끝의 '원'을 빼고, 마이너스(-)·소수점도 일단 읽은 뒤 뒤에서 알려 줌
     const 숫자글 = 끝.replace(/,/g, "").replace(/원$/, "");
-    if (/^\d+$/.test(숫자글)) { 숫자.unshift(Number(숫자글)); 조각.pop(); continue; }
+    if (/^-?\d+(\.\d+)?$/.test(숫자글)) { 숫자.unshift(Number(숫자글)); 조각.pop(); continue; }
     break;
   }
   const 쓸숫자 = 숫자.slice(-3);
