@@ -35,7 +35,9 @@ button.주요 { background: #2f6fde; border-color: #2f6fde; color: #fff; font-we
 .알림 { margin-top: 4px; font-size: 13px; color: #7a5b00; }
 .알림.오류 { color: #b00020; }
 .매입 { margin-top: 4px; font-size: 14px; }
-.매입 b { padding: 1px 8px; border-radius: 6px; }
+.매입 b { padding: 1px 8px; border-radius: 6px; margin-left: 4px; }
+.매입 label { cursor: pointer; }
+.줄 .매입 input[type=checkbox] { width: 17px; height: 17px; margin: 0 0 0 4px; vertical-align: -3px; }
 .매입.가능 b { background: #dff3e4; color: #1b6b34; }
 .매입.불가 b { background: #ffeedd; color: #b3540a; }
 .매입.없음 b { background: #eceff2; color: #4a5560; }
@@ -268,6 +270,8 @@ function 체크리스트그리기() {
     const 칸 = 요소("div", "줄");
     const 체크 = document.createElement("input");
     체크.type = "checkbox";
+    체크.className = "확인체크";
+    체크.title = "이 물품을 확인했으면 체크";
     체크.addEventListener("change", () => { 칸.classList.toggle("체크됨", 체크.checked); 요약그리기(); });
     칸.appendChild(체크);
 
@@ -290,7 +294,7 @@ function 체크리스트그리기() {
 
     const 계산 = 계산글(줄.결과);
     if (계산) 내용.appendChild(요소("div", "계산", 계산));
-    if (줄.결과.상태 === "정상") 내용.appendChild(매입부가세요소(줄.결과.매입부가세));
+    if (줄.결과.상태 === "정상") 내용.appendChild(매입부가세요소(줄));
     줄.결과.알림.forEach(글 => 내용.appendChild(요소("div", "알림" + (줄.결과.상태 === "오류" ? " 오류" : ""), "· " + 글)));
     if (줄.정답비교 && !줄.정답비교.맞음) 내용.appendChild(요소("div", "알림 오류", "· 정답: " + 줄.정답비교.정답글));
     칸.appendChild(내용);
@@ -300,15 +304,42 @@ function 체크리스트그리기() {
   요약그리기();
 }
 
-function 매입부가세요소(값) {
-  const 반 = 값 === "대상 (공제 가능)" ? "가능" : 값 === "대상 (공제 불가)" ? "불가" : "없음";
-  const 칸 = 요소("div", "매입 " + 반, "매입부가세: ");
-  칸.appendChild(요소("b", null, (반 === "없음" ? "☐ " : "☑ ") + 값));
+// ===== 매입부가세 직접 체크·해제 =====
+// 줄.매입직접: 없음(자동 그대로) / true(직접 체크) / false(직접 해제)
+// 체크를 바꿔도 공급가액·세액·불공제세 숫자는 바뀌지 않음
+function 매입값(줄) {
+  const 자동 = 줄.결과.매입부가세;
+  if (줄.매입직접 == null) return 자동;
+  if (줄.매입직접 === false) return "해당없음";
+  return 자동.indexOf("대상") === 0 ? 자동 : "대상 (직접 체크)";
+}
+
+function 매입부가세요소(줄) {
+  const 값 = 매입값(줄);
+  const 반 = 값 === "대상 (공제 가능)" ? "가능" : 값 === "해당없음" ? "없음" : "불가";
+  const 칸 = 요소("div", "매입 " + 반);
+  const 이름표 = document.createElement("label");
+  이름표.appendChild(document.createTextNode("매입부가세: "));
+  const 체크 = document.createElement("input");
+  체크.type = "checkbox";
+  체크.className = "매입체크";
+  체크.title = "눌러서 직접 체크하거나 해제할 수 있어요";
+  체크.checked = 값 !== "해당없음";
+  체크.addEventListener("change", () => {
+    const 자동대상 = 줄.결과.매입부가세.indexOf("대상") === 0;
+    줄.매입직접 = 체크.checked === 자동대상 ? null : 체크.checked; // 자동과 같아지면 '직접 바꿈' 표시를 없앰
+    칸.replaceWith(매입부가세요소(줄));
+    요약그리기();
+  });
+  이름표.appendChild(체크);
+  이름표.appendChild(요소("b", null, 값));
+  칸.appendChild(이름표);
+  if (줄.매입직접 != null) 칸.appendChild(요소("span", "작게", ` (직접 바꿈 · 자동 결과: ${줄.결과.매입부가세})`));
   return 칸;
 }
 
 function 요약그리기() {
-  const 체크들 = [...document.querySelectorAll("#목록 input[type=checkbox]")];
+  const 체크들 = [...document.querySelectorAll("#목록 input.확인체크")];
   const 체크수 = 체크들.filter(c => c.checked).length;
   const 문제수 = 지금줄들.filter(줄 => 줄.결과.상태 !== "정상").length;
   let 글 = `물품 ${지금줄들.length}개 · 확인 ${체크수}/${지금줄들.length}`;
@@ -335,9 +366,13 @@ function 요약그리기() {
   표.append(머리, 몸);
   자리.appendChild(요소("p", "요약", "✅ 모두 확인했어요. 합계:"));
   자리.appendChild(표);
-  const 건수 = 값 => 정상.filter(줄 => 줄.결과.매입부가세 === 값).length;
-  자리.appendChild(요소("p", "요약",
-    `매입부가세: ☑ 대상 (공제 가능) ${건수("대상 (공제 가능)")}개 · ☑ 대상 (공제 불가) ${건수("대상 (공제 불가)")}개 · ☐ 해당없음 ${건수("해당없음")}개`));
+  const 건수 = 값 => 정상.filter(줄 => 매입값(줄) === 값).length;
+  let 매입글 = `매입부가세: ☑ 대상 (공제 가능) ${건수("대상 (공제 가능)")}개 · ☑ 대상 (공제 불가) ${건수("대상 (공제 불가)")}개`;
+  if (건수("대상 (직접 체크)")) 매입글 += ` · ☑ 대상 (직접 체크) ${건수("대상 (직접 체크)")}개`;
+  매입글 += ` · ☐ 해당없음 ${건수("해당없음")}개`;
+  const 직접수 = 정상.filter(줄 => 줄.매입직접 != null).length;
+  if (직접수) 매입글 += ` (직접 바꾼 것 ${직접수}개)`;
+  자리.appendChild(요소("p", "요약", 매입글));
   if (문제수) 자리.appendChild(요소("p", "알림", `· ⚠️❗ 표시된 ${문제수}개는 합계에 넣지 않았어요. 따로 확인해 주세요.`));
 }
 
