@@ -34,6 +34,11 @@ button.주요 { background: #2f6fde; border-color: #2f6fde; color: #fff; font-we
 .계산 { margin-top: 4px; font-size: 15px; }
 .알림 { margin-top: 4px; font-size: 13px; color: #7a5b00; }
 .알림.오류 { color: #b00020; }
+.매입 { margin-top: 4px; font-size: 14px; }
+.매입 b { padding: 1px 8px; border-radius: 6px; }
+.매입.가능 b { background: #dff3e4; color: #1b6b34; }
+.매입.불가 b { background: #ffeedd; color: #b3540a; }
+.매입.없음 b { background: #eceff2; color: #4a5560; }
 .요약 { font-size: 15px; margin: 6px 0; }
 table.합계 { border-collapse: collapse; margin-top: 8px; font-size: 15px; }
 table.합계 th, table.합계 td { border: 1px solid #dde1e6; padding: 6px 12px; text-align: right; }
@@ -119,7 +124,7 @@ const 카드C_기준금액 = 500000; // 연습용 가상 값
 // 상태: "정상" / "오류"(넣은 값에 문제가 있음)
 function 세액정하기(물품, 목록) {
   const 결과 = {
-    구분: "", 공급가액: 0, 세액: 0, 불공제세: 0,
+    구분: "", 공급가액: 0, 세액: 0, 불공제세: 0, 매입부가세: "–",
     상태: "정상", 알림: [], 오류종류: "",
   };
   const 찾음 = 구분찾기(물품.물품이름, 목록);
@@ -157,6 +162,7 @@ function 세액정하기(물품, 목록) {
   // 면세: 카드와 상관없이 공급가액 100%
   if (결과.구분 === "면세") {
     결과.공급가액 = 총금액;
+    결과.매입부가세 = 매입부가세정하기(결과);
     return 결과;
   }
 
@@ -172,7 +178,19 @@ function 세액정하기(물품, 목록) {
       결과.알림.push(`카드 C(하이브리드) 기준 금액(${금액글(카드C_기준금액)}원)을 넘어 카드 A(자체)처럼 계산했어요`);
     }
   }
+  결과.매입부가세 = 매입부가세정하기(결과);
   return 결과;
+}
+
+// 매입부가세 대상인지 정함
+// 가. 과세 + 공제 가능(세액 칸) → 대상 (공제 가능)
+// 나. 과세 + 불공제(불공제세 칸, 비과세(불공제) 물품 포함) → 대상 (공제 불가)
+// 다. 면세 / 라. 부가세가 없는 거래(세액·불공제세 모두 0원) → 해당없음
+function 매입부가세정하기(결과) {
+  if (결과.구분 === "면세") return "해당없음";
+  if (결과.세액 > 0) return "대상 (공제 가능)";
+  if (결과.불공제세 > 0) return "대상 (공제 불가)";
+  return "해당없음";
 }
 
 function 금액글(n) { return Number(n).toLocaleString("ko-KR"); }
@@ -272,6 +290,7 @@ function 체크리스트그리기() {
 
     const 계산 = 계산글(줄.결과);
     if (계산) 내용.appendChild(요소("div", "계산", 계산));
+    if (줄.결과.상태 === "정상") 내용.appendChild(매입부가세요소(줄.결과.매입부가세));
     줄.결과.알림.forEach(글 => 내용.appendChild(요소("div", "알림" + (줄.결과.상태 === "오류" ? " 오류" : ""), "· " + 글)));
     if (줄.정답비교 && !줄.정답비교.맞음) 내용.appendChild(요소("div", "알림 오류", "· 정답: " + 줄.정답비교.정답글));
     칸.appendChild(내용);
@@ -279,6 +298,13 @@ function 체크리스트그리기() {
   });
   document.getElementById("결과상자").classList.remove("숨김");
   요약그리기();
+}
+
+function 매입부가세요소(값) {
+  const 반 = 값 === "대상 (공제 가능)" ? "가능" : 값 === "대상 (공제 불가)" ? "불가" : "없음";
+  const 칸 = 요소("div", "매입 " + 반, "매입부가세: ");
+  칸.appendChild(요소("b", null, (반 === "없음" ? "☐ " : "☑ ") + 값));
+  return 칸;
 }
 
 function 요약그리기() {
@@ -309,6 +335,9 @@ function 요약그리기() {
   표.append(머리, 몸);
   자리.appendChild(요소("p", "요약", "✅ 모두 확인했어요. 합계:"));
   자리.appendChild(표);
+  const 건수 = 값 => 정상.filter(줄 => 줄.결과.매입부가세 === 값).length;
+  자리.appendChild(요소("p", "요약",
+    `매입부가세: ☑ 대상 (공제 가능) ${건수("대상 (공제 가능)")}개 · ☑ 대상 (공제 불가) ${건수("대상 (공제 불가)")}개 · ☐ 해당없음 ${건수("해당없음")}개`));
   if (문제수) 자리.appendChild(요소("p", "알림", `· ⚠️❗ 표시된 ${문제수}개는 합계에 넣지 않았어요. 따로 확인해 주세요.`));
 }
 
@@ -350,8 +379,13 @@ function 정답비교하기(행, 결과) {
   if (정답 == null || 정답 === "") return null; // 정답 칸이 없는 파일이면 비교하지 않음
   if (/^\d+$/.test(정답)) {
     const 칸들 = ["공급가액", "세액", "불공제세"];
-    const 맞음 = 결과.상태 === "정상" && 칸들.every(k => 결과[k] === Number(행["정답_" + k] || 0));
-    return { 맞음, 정답글: 칸들.map(k => `${k} ${금액글(Number(행["정답_" + k] || 0))}`).join(" / ") };
+    const 매입정답 = 행["정답_매입부가세"];
+    const 같게 = t => String(t || "").replace(/\s+/g, "");
+    const 맞음 = 결과.상태 === "정상" && 칸들.every(k => 결과[k] === Number(행["정답_" + k] || 0))
+      && (!매입정답 || 같게(매입정답) === 같게(결과.매입부가세));
+    let 정답글 = 칸들.map(k => `${k} ${금액글(Number(행["정답_" + k] || 0))}`).join(" / ");
+    if (매입정답) 정답글 += ` / 매입부가세 ${매입정답}`;
+    return { 맞음, 정답글 };
   }
   let 맞음;
   if (정답.includes("금액")) 맞음 = 결과.오류종류 === "금액";
