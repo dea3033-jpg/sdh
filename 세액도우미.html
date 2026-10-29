@@ -46,6 +46,11 @@ table.합계 { border-collapse: collapse; margin-top: 8px; font-size: 15px; }
 table.합계 th, table.합계 td { border: 1px solid #dde1e6; padding: 6px 12px; text-align: right; }
 table.합계 th { background: #f0f3f6; }
 .숨김 { display: none; }
+.탭줄 { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; border-bottom: 2px solid #dde1e6; padding-bottom: 8px; }
+.탭줄 button { margin: 0; padding: 6px 12px; font-size: 14px; }
+.탭줄 button.고름 { background: #2f6fde; border-color: #2f6fde; color: #fff; font-weight: bold; }
+.항목 { margin-top: 4px; font-size: 14px; }
+.항목 b { padding: 1px 8px; border-radius: 6px; background: #eef1ff; color: #3a3f9e; }
 </style>
 </head>
 <body>
@@ -86,6 +91,7 @@ window.onerror = function (메시지) {
   </div>
 
   <div class="상자 숨김" id="결과상자">
+    <div class="탭줄" id="탭자리"></div>
     <div class="요약" id="요약"></div>
     <div id="목록"></div>
     <div id="합계자리"></div>
@@ -126,7 +132,7 @@ const 카드C_기준금액 = 500000; // 연습용 가상 값
 // 상태: "정상" / "오류"(넣은 값에 문제가 있음)
 function 세액정하기(물품, 목록) {
   const 결과 = {
-    구분: "", 공급가액: 0, 세액: 0, 불공제세: 0, 매입부가세: "–",
+    구분: "", 공급가액: 0, 세액: 0, 불공제세: 0, 매입부가세: "–", 항목: "–",
     상태: "정상", 알림: [], 오류종류: "",
   };
   const 찾음 = 구분찾기(물품.물품이름, 목록);
@@ -165,6 +171,7 @@ function 세액정하기(물품, 목록) {
   if (결과.구분 === "면세") {
     결과.공급가액 = 총금액;
     결과.매입부가세 = 매입부가세정하기(결과);
+    결과.항목 = 항목정하기(결과, 카드);
     return 결과;
   }
 
@@ -181,7 +188,19 @@ function 세액정하기(물품, 목록) {
     }
   }
   결과.매입부가세 = 매입부가세정하기(결과);
+  결과.항목 = 항목정하기(결과, 카드);
   return 결과;
+}
+
+// 항목을 정함 (면세 → 면세, A → 매입부가세-카드, B → 매입부가세-불공제,
+// C → 50만원 이하면 가지급금, 50만원 초과면 매입부가세-카드)
+const 항목목록 = ["매입부가세-카드", "매입부가세-불공제", "가지급금", "면세"];
+function 항목정하기(결과, 카드) {
+  if (결과.구분 === "면세") return "면세";
+  if (카드 === "A") return "매입부가세-카드";
+  if (카드 === "B") return "매입부가세-불공제";
+  if (카드 === "C") return 결과.총금액 > 카드C_기준금액 ? "매입부가세-카드" : "가지급금";
+  return "–";
 }
 
 // 매입부가세 대상인지 정함
@@ -231,6 +250,27 @@ function 목록읽기(글, 기본카드) {
 
 // ===== 화면 부분: 체크리스트 그리기 =====
 let 지금줄들 = []; // [{물품, 결과, 정답비교}]
+let 지금탭 = "전체";
+
+// ===== 화면 부분: 항목별 탭 =====
+function 탭맞음(줄) { return 지금탭 === "전체" || 줄.결과.항목 === 지금탭; }
+
+function 탭그리기() {
+  const 자리 = document.getElementById("탭자리");
+  자리.innerHTML = "";
+  ["전체"].concat(항목목록).forEach(탭 => {
+    const 수 = 탭 === "전체" ? 지금줄들.length : 지금줄들.filter(줄 => 줄.결과.항목 === 탭).length;
+    const 단추 = 요소("button", 탭 === 지금탭 ? "고름" : "", `${탭} (${수})`);
+    단추.addEventListener("click", () => { 지금탭 = 탭; 탭적용(); });
+    자리.appendChild(단추);
+  });
+}
+
+function 탭적용() {
+  지금줄들.forEach(줄 => 줄.칸.classList.toggle("숨김", !탭맞음(줄)));
+  탭그리기();
+  요약그리기();
+}
 
 function 고른카드() {
   return document.querySelector('input[name="카드"]:checked').value;
@@ -268,7 +308,9 @@ function 체크리스트그리기() {
   목록.innerHTML = "";
   지금줄들.forEach((줄, i) => {
     const 칸 = 요소("div", "줄");
+    줄.칸 = 칸;
     const 체크 = document.createElement("input");
+    줄.확인 = 체크;
     체크.type = "checkbox";
     체크.className = "확인체크";
     체크.title = "이 물품을 확인했으면 체크";
@@ -294,14 +336,20 @@ function 체크리스트그리기() {
 
     const 계산 = 계산글(줄.결과);
     if (계산) 내용.appendChild(요소("div", "계산", 계산));
-    if (줄.결과.상태 === "정상") 내용.appendChild(매입부가세요소(줄));
+    if (줄.결과.상태 === "정상") {
+      const 항목칸 = 요소("div", "항목", "항목: ");
+      항목칸.appendChild(요소("b", null, 줄.결과.항목));
+      내용.appendChild(항목칸);
+      내용.appendChild(매입부가세요소(줄));
+    }
     줄.결과.알림.forEach(글 => 내용.appendChild(요소("div", "알림" + (줄.결과.상태 === "오류" ? " 오류" : ""), "· " + 글)));
     if (줄.정답비교 && !줄.정답비교.맞음) 내용.appendChild(요소("div", "알림 오류", "· 정답: " + 줄.정답비교.정답글));
     칸.appendChild(내용);
     목록.appendChild(칸);
   });
   document.getElementById("결과상자").classList.remove("숨김");
-  요약그리기();
+  지금탭 = "전체";
+  탭적용();
 }
 
 // ===== 매입부가세 직접 체크·해제 =====
@@ -339,23 +387,23 @@ function 매입부가세요소(줄) {
 }
 
 function 요약그리기() {
-  const 체크들 = [...document.querySelectorAll("#목록 input.확인체크")];
-  const 체크수 = 체크들.filter(c => c.checked).length;
-  const 문제수 = 지금줄들.filter(줄 => 줄.결과.상태 !== "정상").length;
-  let 글 = `물품 ${지금줄들.length}개 · 확인 ${체크수}/${지금줄들.length}`;
+  const 보이는줄 = 지금줄들.filter(탭맞음);
+  const 체크수 = 보이는줄.filter(줄 => 줄.확인 && 줄.확인.checked).length;
+  const 문제수 = 보이는줄.filter(줄 => 줄.결과.상태 !== "정상").length;
+  let 글 = (지금탭 === "전체" ? "" : `[${지금탭}] `) + `물품 ${보이는줄.length}개 · 확인 ${체크수}/${보이는줄.length}`;
   if (문제수) 글 += ` · ⚠️❗ 살펴볼 물품 ${문제수}개`;
-  const 비교 = 지금줄들.filter(줄 => 줄.정답비교);
+  const 비교 = 보이는줄.filter(줄 => 줄.정답비교);
   if (비교.length) 글 += ` · 정답과 맞음 ${비교.filter(줄 => 줄.정답비교.맞음).length}/${비교.length}`;
   document.getElementById("요약").textContent = 글;
 
   const 자리 = document.getElementById("합계자리");
   자리.innerHTML = "";
-  if (!지금줄들.length) return;
-  if (체크수 < 지금줄들.length) {
+  if (!보이는줄.length) { if (지금줄들.length) 자리.appendChild(요소("p", "설명", "이 항목에 해당하는 물품이 없어요.")); return; }
+  if (체크수 < 보이는줄.length) {
     자리.appendChild(요소("p", "설명", "모든 물품에 ☑ 체크하면 합계가 나와요."));
     return;
   }
-  const 정상 = 지금줄들.filter(줄 => 줄.결과.상태 === "정상");
+  const 정상 = 보이는줄.filter(줄 => 줄.결과.상태 === "정상");
   const 합 = k => 정상.reduce((s, 줄) => s + 줄.결과[k], 0);
   const 표 = 요소("table", "합계");
   const 머리 = 요소("tr");
@@ -364,7 +412,7 @@ function 요약그리기() {
   [`합계 (${정상.length}개)`, 합("공급가액"), 합("세액"), 합("불공제세"), 합("총금액")]
     .forEach((v, i) => 몸.appendChild(요소(i ? "td" : "th", null, i ? 금액글(v) : v)));
   표.append(머리, 몸);
-  자리.appendChild(요소("p", "요약", "✅ 모두 확인했어요. 합계:"));
+  자리.appendChild(요소("p", "요약", 지금탭 === "전체" ? "✅ 모두 확인했어요. 합계:" : `✅ [${지금탭}] 모두 확인했어요. 이 항목의 합계:`));
   자리.appendChild(표);
   const 건수 = 값 => 정상.filter(줄 => 매입값(줄) === 값).length;
   let 매입글 = `매입부가세: ☑ 대상 (공제 가능) ${건수("대상 (공제 가능)")}개 · ☑ 대상 (공제 불가) ${건수("대상 (공제 불가)")}개`;
@@ -382,6 +430,7 @@ function 붙여넣은목록확인() {
     지금줄들 = [];
     document.getElementById("목록").innerHTML = "";
     document.getElementById("합계자리").innerHTML = "";
+    document.getElementById("탭자리").innerHTML = "";
     document.getElementById("요약").textContent =
       "⚠️ 칸에 적힌 물품이 없어요. 칸 안의 회색 글씨는 보기예요. 물품을 직접 적거나 [예시 넣기]를 먼저 눌러 주세요.";
     document.getElementById("결과상자").classList.remove("숨김");
@@ -417,9 +466,11 @@ function 정답비교하기(행, 결과) {
     const 매입정답 = 행["정답_매입부가세"];
     const 같게 = t => String(t || "").replace(/\s+/g, "");
     const 맞음 = 결과.상태 === "정상" && 칸들.every(k => 결과[k] === Number(행["정답_" + k] || 0))
-      && (!매입정답 || 같게(매입정답) === 같게(결과.매입부가세));
+      && (!매입정답 || 같게(매입정답) === 같게(결과.매입부가세))
+      && (!행["정답_항목"] || 같게(행["정답_항목"]) === 같게(결과.항목));
     let 정답글 = 칸들.map(k => `${k} ${금액글(Number(행["정답_" + k] || 0))}`).join(" / ");
     if (매입정답) 정답글 += ` / 매입부가세 ${매입정답}`;
+    if (행["정답_항목"]) 정답글 += ` / 항목 ${행["정답_항목"]}`;
     return { 맞음, 정답글 };
   }
   let 맞음;
